@@ -25,12 +25,16 @@ app.get("/", (req, res) => {
   res.send("Hello from Mogo API!");
 });
 
-db_connection().then(() => {
-  app.listen(4000, () => {
-    console.log(`server listening on port 8080`);
+const PORT = process.env.PORT || 4000;
+
+db_connection()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`server listening on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.log(err);
   });
-}).catch((err)=>{
-  console.log(err);
-})
 
 console.log(moment("2024-05-08T11:38:48.376+00:00").format("LLLL"));
