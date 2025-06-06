@@ -11,18 +11,21 @@ const MakeOrder = async (req, res) => {
     req.body.userDetails = req.userData;
     req.body.user_id = req.userData.id;
     const result = await Orders.create(req.body);
-    const email = await orderMail({
-      ...result._doc,
-      invoice_no: req.body.productDetails[0].invoice_no,
-    });
 
-    if (result.paymentType === "Online Payment") {
-      let payload = {
+    // const email = await orderMail({
+    //   ...result._doc,
+    //   invoice_no: req.body.productDetails[0].invoice_no,
+    // });
+
+    console.log("PAYMENT TYPE:", result.paymentType);
+    if ((result.paymentType || "").trim().toLowerCase() === "online payment") {
+      const payload = {
         order_id: result._id,
         user_email: _.get(result, "userDetails[0].email", ""),
         payment: result.paymentTotal,
       };
-      TrigerPayment(req, res, payload);
+      console.log("Triggering CCAvenue Payment for Order ID:", result._id);
+      return TrigerPayment(req, res, payload);
     }
     const trackResult = _.get(req, "body.productDetails", []).map((res) => {
       return {
