@@ -1,51 +1,35 @@
-const crypto = require("crypto");
 const querystring = require("querystring");
+const ccav = require("./ccavutil");
 
 const TrigerPayment = (req, res, payload) => {
-  console.log("Triggering CCAvenue Payment with:", payload);
-
   try {
     const { order_id, user_email, payment } = payload;
 
+    const cleanOrderId = typeof order_id === "object" ? order_id.toString() : order_id;
+
     const ccAvenueData = {
       merchant_id: process.env.CCAVENUE_MERCHANT_ID,
-      order_id: order_id.toString(),
+      order_id: cleanOrderId,
       currency: "INR",
       amount: parseFloat(payment).toFixed(2),
-      redirect_url: "https://themogo.com/payment-success",
-      cancel_url: "https://themogo.com/payment-cancel",
+      redirect_url: "https://themogo.com",
+      cancel_url: "https://themogo.com",
       language: "EN",
-      billing_name: "Test User",
-      billing_email: user_email,
-      billing_tel: "9876543210",
-      billing_address: "123 Test Street",
-      billing_city: "Mumbai",
-      billing_state: "Maharashtra",
-      billing_zip: "400001",
-      billing_country: "India",
     };
 
-    const data = querystring.stringify(ccAvenueData);
+    const dataString = querystring.stringify(ccAvenueData);
+    const encryptedData = ccav.encrypt(dataString, process.env.CCAVENUE_WORKING_KEY);
 
-    const key = Buffer.from(process.env.CCAVENUE_WORKING_KEY.trim(), "utf8"); // Ì∑º .trim() removes extra spaces
-    const iv = Buffer.from(process.env.CCAVENUE_IV.trim(), "utf8"); // Ì∑º remove leading space
+    const url = `https://test.ccavenue.com/transaction.do?command=initiateTransaction&access_code=${process.env.CCAVENUE_ACCESS_CODE}&encRequest=${encryptedData}`;
 
-    const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
-    let encryptedData = cipher.update(data, "utf8", "hex");
-    encryptedData += cipher.final("hex");
-
-    const responseUrl = `https://secure.ccavenue.com/transaction/transaction.do?command=initiateTransaction&encRequest=${encryptedData}&access_code=${process.env.CCAVENUE_ACCESS_CODE}`;
-
-    console.log("Redirecting to:", responseUrl);
-
-    res.status(200).json({
+    return res.status(200).json({
       paymentRedirect: true,
-      url: responseUrl,
+      redirectUrl: url,
     });
 
   } catch (err) {
-    console.error("Error in CCAvenue Trigger:", err);
-    res.status(500).send({ message: "Failed to initialize payment" });
+    console.error("‚ùå Error in CCAvenue Trigger:", err);
+    return res.status(500).json({ message: "Failed to initialize payment" });
   }
 };
 
