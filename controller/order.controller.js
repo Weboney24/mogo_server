@@ -24,7 +24,7 @@ const MakeOrder = async (req, res) => {
         user_email: _.get(result, "userDetails[0].email", ""),
         payment: result.paymentTotal,
       };
-      console.log("Triggering CCAvenue Payment for Order ID:", result._id);
+      console.log("Triggering CCAvenue Payment for Order ID:", payload);
       return TrigerPayment(req, res, payload);
     }
     const trackResult = _.get(req, "body.productDetails", []).map((res) => {
