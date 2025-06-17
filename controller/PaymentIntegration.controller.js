@@ -20,7 +20,7 @@ const TrigerPayment = (req, res, payload) => {
     const dataString = querystring.stringify(ccAvenueData);
     const encryptedData = ccav.encrypt(dataString, process.env.CCAVENUE_WORKING_KEY);
 
-    const url = `https://test.ccavenue.com/transaction.do?command=initiateTransaction&access_code=${process.env.CCAVENUE_ACCESS_CODE}&encRequest=${encryptedData}`;
+    const url = `https://secure.ccavenue.com/transaction.do?command=initiateTransaction&access_code=${process.env.CCAVENUE_ACCESS_CODE}&encRequest=${encryptedData}`;
 
     return res.status(200).json({
       paymentRedirect: true,
