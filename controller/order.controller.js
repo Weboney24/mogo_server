@@ -5,36 +5,88 @@ const Notification = require("../models/notification.models");
 const _ = require("lodash");
 const { TrigerPayment } = require("./PaymentIntegration.controller");
 const { orderMail } = require("../mail/sendmail");
+const { default: axios } = require("axios");
+
+const apiKey = process.env.ST_COURIER_API_KEY;
+const apiUrl = process.env.ST_COURIER_API_URL;
+
+const awbNumbers = ["53029107740", "53029107751", "53029107762", "53029107773", "53029107784", "53029107795", "53029107806", "53029107810", "53029107821", "53029107832"];
+let currentAwbIndex = 0;
 
 const MakeOrder = async (req, res) => {
   try {
     req.body.userDetails = req.userData;
     req.body.user_id = req.userData.id;
+
     const result = await Orders.create(req.body);
 
-    // const email = await orderMail({
-    //   ...result._doc,
-    //   invoice_no: req.body.productDetails[0].invoice_no,
-    // });
+    const isOnline = (result.paymentType || "").trim().toLowerCase() === "online payment";
+    const isCOD = (result.paymentType || "").trim().toLowerCase() === "cash on delivery";
+    const assignedAwb = awbNumbers[currentAwbIndex] || "";
+    const delivery = result.deliveryAddress?.[0] ?? {};
+    const product = result.productDetails?.[0] ?? {};
+    const user = result.userDetails?.[0] ?? {};
+    const totalAmount = result.paymentTotal;
 
-    console.log("PAYMENT TYPE:", result.paymentType);
-    if ((result.paymentType || "").trim().toLowerCase() === "online payment") {
+    const courierData = [
+      {
+        awbno: assignedAwb,
+        refno: result.productDetails[0].invoice_no,
+        orginsrc: "TNPVM",
+        frmname: result.productDetails[0].vender_name,
+        frmadd1: result.productDetails[0].vender_address,
+        frmadd2: result.productDetails[0].vender_address,
+        frmpincode: result.productDetails[0].vender_zipcode,
+        frmphone: result.productDetails[0].vender_phone,
+        toname: result.userDetails[0].name,
+        toadd1: result.deliveryAddress[0].full_name + ", " + result.deliveryAddress[0].address + ", " + result.deliveryAddress[0].district + ", " + result.deliveryAddress[0].pincode,
+        toadd2: result.deliveryAddress[0].full_name + ", " + result.deliveryAddress[0].address + ", " + result.deliveryAddress[0].district + ", " + result.deliveryAddress[0].pincode,
+        toarea: result.deliveryAddress[0].address,
+        topincode: result.deliveryAddress[0].pincode,
+        tophone: result.deliveryAddress[0].phone_number,
+        goodsname: result.productDetails[0].product_name,
+        goodsvalue: result.productDetails[0].product_finalTotal,
+        doctype: "N",
+        transmode: "S",
+        qty: result.productDetails[0].product_quantity,
+        weight: result.productDetails[0].product_weight,
+        volweight: result.productDetails[0].whole_product_weights,
+        topayamt: isOnline ? totalAmount : "0",
+        codamt: isCOD ? totalAmount : "0",
+        invfiletype: "",
+        invcopy: "",
+      },
+    ];
+
+    if (isOnline) {
       const payload = {
         order_id: result._id,
-        user_email: _.get(result, "userDetails[0].email", ""),
-        payment: result.paymentTotal,
+        user_email: user.email || "",
+        payment: totalAmount,
       };
-      console.log("Triggering CCAvenue Payment for Order ID:", payload);
       return TrigerPayment(req, res, payload);
     }
-    const trackResult = _.get(req, "body.productDetails", []).map((res) => {
-      return {
-        order_status: "confirmed",
-        invoice_no: res.invoice_no,
-        order_id: result._id,
-      };
-    });
+
+    const trackResult = (req.body.productDetails || []).map((item) => ({
+      order_status: "confirmed",
+      invoice_no: item.invoice_no,
+      order_id: result._id,
+    }));
     await TrackOrder.create(trackResult);
+
+    if (currentAwbIndex < awbNumbers.length - 1) {
+      currentAwbIndex++;
+    }
+
+    const courierResponse = await axios.post("https://erpstcourier.com/ecom/v2/demobookings.php", courierData, {
+      headers: {
+        "API-TOKEN": "UcTcwSWsZGsl9X0ov84LVOlbWulxfYuT",
+        "Content-Type": "application/json",
+      },
+    });
+
+    console.log("Courier API Response:", courierResponse.data);
+
     return res.status(200).send({ message: "order created" });
   } catch (e) {
     console.error(e);

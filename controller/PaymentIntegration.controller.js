@@ -4,9 +4,6 @@ const ccav = require("./ccavutil");
 const TrigerPayment = (req, res, payload) => {
   try {
     const { order_id, user_email, payment } = payload;
-
-    console.log(order_id);
-
     const cleanOrderId = typeof order_id === "object" ? order_id.toString() : order_id;
 
     const ccAvenueData = {
@@ -19,15 +16,10 @@ const TrigerPayment = (req, res, payload) => {
       language: "EN",
     };
 
-    console.log(ccAvenueData);
-
     const dataString = querystring.stringify(ccAvenueData);
     const encryptedData = ccav.encrypt(dataString, process.env.CCAVENUE_WORKING_KEY);
 
-    console.log(encryptedData);
-
-    console.log(process.env.CCAVENUE_WORKING_KEY);
-
+  
     const url = `https://test.ccavenue.com/transaction.do?command=initiateTransaction&access_code=${process.env.CCAVENUE_ACCESS_CODE}&encRequest=${encryptedData}`;
 
     return res.status(200).json({
