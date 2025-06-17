@@ -1,11 +1,4 @@
-const {
-  MakeOrder,
-  getMyOrderDetails,
-  getSingleOrderDetails,
-  getAllOrders,
-  updateOrderStatus,
-  trackMyOrder,
-} = require("../controller/order.controller");
+const { MakeOrder, getMyOrderDetails, getSingleOrderDetails, getAllOrders, updateOrderStatus, trackMyOrder, paymentSuccess } = require("../controller/order.controller");
 
 const router = require("express").Router();
 
