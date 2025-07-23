@@ -137,10 +137,12 @@
                          <tr>
                               <td><%= product.product_name %></td>
                               <td><%= product.product_quantity %></td>
-                              <td><%= product.product_finalTotal %></td>
+                              <td>₹<%= totalAmount %></td>
                          </tr>
                          <% }); %>
                     </table>
+                    <p class="total">Total Amount: ₹<%= totalAmount %>
+                    </p>
                </div>
           </div>
           <div class="footer">If you have any questions, contact us at <span><a href="http://themogo.com/contact">TheMogo.com</a></span></div>

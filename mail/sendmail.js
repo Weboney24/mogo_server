@@ -15,14 +15,16 @@ const transporter = nodemailer.createTransport({
 });
 
 const sendMail = async (values) => {
+  console.log(values);
   try {
     if (!values.email) {
       console.warn("⚠️ Warning: No recipient email provided for sendMail()");
       return false;
     }
 
-    const subject = TemplateHelper(values)?.subject || "Default Subject";
-    const html = TemplateHelper(values)?.template || "<p>No content available</p>";
+    const templateData = TemplateHelper(values);
+    const subject = templateData?.subject || "Default Subject";
+    const html = templateData?.template || "<p>No content available</p>";
 
     const result = await transporter.sendMail({
       from: "manikandan@weboney.in",
