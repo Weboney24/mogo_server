@@ -4,7 +4,7 @@ const TrackOrder = require("../models/trackorder.models");
 const Notification = require("../models/notification.models");
 const _ = require("lodash");
 const { TrigerPayment } = require("./PaymentIntegration.controller");
-const { orderMail } = require("../mail/sendmail");
+const { orderMail, sendMail } = require("../mail/sendmail");
 const { default: axios } = require("axios");
 
 const apiKey = process.env.ST_COURIER_API_KEY;
@@ -17,9 +17,7 @@ const MakeOrder = async (req, res) => {
   try {
     req.body.userDetails = req.userData;
     req.body.user_id = req.userData.id;
-
     const result = await Orders.create(req.body);
-
     const isOnline = (result.paymentType || "").trim().toLowerCase() === "online payment";
     const isCOD = (result.paymentType || "").trim().toLowerCase() === "cash on delivery";
     const assignedAwb = awbNumbers[currentAwbIndex] || "";
@@ -27,6 +25,18 @@ const MakeOrder = async (req, res) => {
     const product = result.productDetails?.[0] ?? {};
     const user = result.userDetails?.[0] ?? {};
     const totalAmount = result.paymentTotal;
+
+    await sendMail({
+      email: result?.userDetails?.[0]?.email,
+      name: result?.userDetails?.[0]?.name,
+      invoice_no: result?.productDetails?.[0]?.invoice_no,
+      product_name: result?.productDetails?.[0]?.product_name,
+      price: result?.productDetails?.[0]?.product_finalTotal,
+      address: `${result?.deliveryAddress?.[0]?.full_name}, ${result?.deliveryAddress?.[0]?.address}, ${result?.deliveryAddress?.[0]?.district}, ${result?.deliveryAddress?.[0]?.pincode}`,
+      productDetails: result.productDetails,
+      totalAmount: result.paymentTotal,
+      target: "placed order",
+    });
 
     const courierData = [
       {
