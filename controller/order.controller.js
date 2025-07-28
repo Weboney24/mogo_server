@@ -15,68 +15,30 @@ let currentAwbIndex = 0;
 
 const MakeOrder = async (req, res) => {
   try {
-    req.body.userDetails = req.userData;
-    req.body.user_id = req.userData.id;
+    const user = req.userData;
+    req.body.userDetails = user;
+    req.body.user_id = user.id;
+
+    const isOnline = (req.body.paymentType || "").trim().toLowerCase() === "online payment";
+    const isCOD = (req.body.paymentType || "").trim().toLowerCase() === "cash on delivery";
+    const totalAmount = req.body.paymentTotal;
+
+    // ✅ 1. IF ONLINE, first redirect to payment gateway
+    if (isOnline) {
+      const payload = {
+        user_email: user.email,
+        payment: totalAmount,
+      };
+      return TrigerPayment(req, res, payload); // Triggers payment gateway
+    }
+
+    // ✅ 2. IF COD — Proceed to place order immediately
     const result = await Orders.create(req.body);
-    const isOnline = (result.paymentType || "").trim().toLowerCase() === "online payment";
-    const isCOD = (result.paymentType || "").trim().toLowerCase() === "cash on delivery";
     const assignedAwb = awbNumbers[currentAwbIndex] || "";
     const delivery = result.deliveryAddress?.[0] ?? {};
     const product = result.productDetails?.[0] ?? {};
-    const user = result.userDetails?.[0] ?? {};
-    const totalAmount = result.paymentTotal;
 
-    await sendMail({
-      email: result?.userDetails?.[0]?.email,
-      name: result?.userDetails?.[0]?.name,
-      invoice_no: result?.productDetails?.[0]?.invoice_no,
-      product_name: result?.productDetails?.[0]?.product_name,
-      price: result?.productDetails?.[0]?.product_finalTotal,
-      address: `${result?.deliveryAddress?.[0]?.full_name}, ${result?.deliveryAddress?.[0]?.address}, ${result?.deliveryAddress?.[0]?.district}, ${result?.deliveryAddress?.[0]?.pincode}`,
-      productDetails: result.productDetails,
-      totalAmount: result.paymentTotal,
-      target: "placed order",
-    });
-
-    const courierData = [
-      {
-        awbno: assignedAwb,
-        refno: result.productDetails[0].invoice_no,
-        orginsrc: "TNPVM",
-        frmname: result.productDetails[0].vender_name,
-        frmadd1: result.productDetails[0].vender_address,
-        frmadd2: result.productDetails[0].vender_address,
-        frmpincode: result.productDetails[0].vender_zipcode,
-        frmphone: result.productDetails[0].vender_phone,
-        toname: result.userDetails[0].name,
-        toadd1: result.deliveryAddress[0].full_name + ", " + result.deliveryAddress[0].address + ", " + result.deliveryAddress[0].district + ", " + result.deliveryAddress[0].pincode,
-        toadd2: result.deliveryAddress[0].full_name + ", " + result.deliveryAddress[0].address + ", " + result.deliveryAddress[0].district + ", " + result.deliveryAddress[0].pincode,
-        toarea: result.deliveryAddress[0].address,
-        topincode: result.deliveryAddress[0].pincode,
-        tophone: result.deliveryAddress[0].phone_number,
-        goodsname: result.productDetails[0].product_name,
-        goodsvalue: result.productDetails[0].product_finalTotal,
-        doctype: "N",
-        transmode: "S",
-        qty: result.productDetails[0].product_quantity,
-        weight: result.productDetails[0].product_weight,
-        volweight: result.productDetails[0].whole_product_weights,
-        topayamt: isOnline ? totalAmount : "0",
-        codamt: isCOD ? totalAmount : "0",
-        invfiletype: "",
-        invcopy: "",
-      },
-    ];
-
-    if (isOnline) {
-      const payload = {
-        order_id: result._id,
-        user_email: user.email || "",
-        payment: totalAmount,
-      };
-      return TrigerPayment(req, res, payload);
-    }
-
+    // ✅ 3. Track Order
     const trackResult = (req.body.productDetails || []).map((item) => ({
       order_status: "confirmed",
       invoice_no: item.invoice_no,
@@ -84,23 +46,71 @@ const MakeOrder = async (req, res) => {
     }));
     await TrackOrder.create(trackResult);
 
+    // ✅ 4. Send Email
+    await sendMail({
+      email: user.email,
+      name: user.name,
+      invoice_no: product.invoice_no,
+      product_name: product.product_name,
+      price: product.product_finalTotal,
+      address: `${delivery.full_name}, ${delivery.address}, ${delivery.district}, ${delivery.pincode}`,
+      productDetails: result.productDetails,
+      totalAmount: totalAmount,
+      target: "placed order",
+    });
+
+    // ✅ 5. Courier Booking
+    const courierData = [
+      {
+        awbno: assignedAwb,
+        refno: product.invoice_no,
+        orginsrc: "TNPVM",
+        frmname: product.vender_name,
+        frmadd1: product.vender_address,
+        frmadd2: product.vender_address,
+        frmpincode: product.vender_zipcode,
+        frmphone: product.vender_phone,
+        toname: user.name,
+        toadd1: `${delivery.full_name}, ${delivery.address}, ${delivery.district}, ${delivery.pincode}`,
+        toadd2: `${delivery.full_name}, ${delivery.address}, ${delivery.district}, ${delivery.pincode}`,
+        toarea: delivery.address,
+        topincode: delivery.pincode,
+        tophone: delivery.phone_number,
+        goodsname: product.product_name,
+        goodsvalue: product.product_finalTotal,
+        doctype: "N",
+        transmode: "S",
+        qty: product.product_quantity,
+        weight: product.product_weight,
+        volweight: product.whole_product_weights,
+        topayamt: isCOD ? "0" : totalAmount,
+        codamt: isCOD ? totalAmount : "0",
+        invfiletype: "",
+        invcopy: "",
+      },
+    ];
+
     if (currentAwbIndex < awbNumbers.length - 1) {
       currentAwbIndex++;
     }
 
-    const courierResponse = await axios.post("https://erpstcourier.com/ecom/v2/demobookings.php", courierData, {
-      headers: {
-        "API-TOKEN": "UcTcwSWsZGsl9X0ov84LVOlbWulxfYuT",
-        "Content-Type": "application/json",
-      },
-    });
+    const courierResponse = await axios.post(
+      "https://erpstcourier.com/ecom/v2/demobookings.php",
+      courierData,
+      {
+        headers: {
+          "API-TOKEN": "UcTcwSWsZGsl9X0ov84LVOlbWulxfYuT",
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
     console.log("Courier API Response:", courierResponse.data);
 
-    return res.status(200).send({ message: "order created" });
+    return res.status(200).send({ message: "Order created successfully." });
   } catch (e) {
     console.error(e);
-    sendResponce(e);
+    sendResponce(e, res);
   }
 };
 
@@ -174,6 +184,54 @@ const trackMyOrder = async (req, res) => {
   }
 };
 
+const cancelOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const order = await Orders.findOne({ "productDetails.invoice_no": id });
+
+    if (!order) {
+      return res.status(404).send({ message: "Order not found" });
+    }
+
+    const product = order.productDetails.find(p => p.invoice_no === id);
+    const currentStatus = product?.order_status;
+
+    if (!product) {
+      return res.status(400).send({ message: "Product not found in the order" });
+    }
+
+    if (currentStatus === "cancelled") {
+      return res.status(400).send({ message: "Order already cancelled" });
+    }
+
+    if (["Item Picked Up By Delivery Partner", "Out For Delivery", "Delivered"].includes(currentStatus)) {
+      return res.status(400).send({ message: "Cannot cancel shipped or delivered orders" });
+    }
+
+    await Orders.updateOne(
+      { "productDetails.invoice_no": id },
+      { $set: { "productDetails.$.order_status": "Cancelled" } }
+    );
+
+    const trackResult = {
+      order_status: "Cancelled",
+      invoice_no: id,
+      order_id: order._id,
+      user_id: order.user_id,
+    };
+
+    await TrackOrder.create(trackResult);
+    await Notification.create(trackResult);
+
+    return res.status(200).send({ message: "Order cancelled successfully" });
+
+  } catch (error) {
+    console.error(error);
+    return sendResponse(res, error); // Ensure this function exists and is spelled correctly
+  }
+};
+
 module.exports = {
   MakeOrder,
   getMyOrderDetails,
@@ -181,4 +239,5 @@ module.exports = {
   getAllOrders,
   updateOrderStatus,
   trackMyOrder,
+  cancelOrder
 };
