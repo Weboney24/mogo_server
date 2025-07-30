@@ -37,6 +37,7 @@ const {
   getMyOrderDetails,
   trackMyOrder,
   getSingleOrderDetails,
+  cancelOrder,
 } = require("../controller/order.controller");
 const { masterProductSearch } = require("../controller/product.controller");
 const { checkLoginStatus } = require("../controller/user.controller");
@@ -106,6 +107,7 @@ router.get("/get_coupon_details/:id", veriFyCoupon);
 
 // orders
 router.post("/create_order", verifyToken, MakeOrder);
+router.post("/order_cancel/:id", verifyToken, cancelOrder);
 router.get("/get_my_orders", verifyToken, getMyOrderDetails);
 router.get("/get_single_order_details/:id", verifyToken, getSingleOrderDetails);
 router.get("/track_my_order/:id", verifyToken, trackMyOrder);
