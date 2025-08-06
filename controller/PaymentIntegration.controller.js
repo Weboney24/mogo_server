@@ -3,18 +3,18 @@ const ccav = require("./ccavutil");
 
 const TrigerPayment = (req, res, payload) => {
   try {
-    const { order_id, user_email, payment } = payload;
+    const { order_id, payment } = payload;
 
-    const cleanOrderId = typeof order_id === "object" ? order_id.toString() : order_id;
-
+    const cleanOrderId = String(order_id);
     const ccAvenueData = {
       merchant_id: process.env.CCAVENUE_MERCHANT_ID,
       order_id: cleanOrderId,
       currency: "INR",
       amount: parseFloat(payment).toFixed(2),
-      redirect_url: "https://themogo.com",
-      cancel_url: "https://themogo.com",
+      redirect_url: `${process.env.BASE_URL}/payment-success`, // backend API endpoint
+      cancel_url: `${process.env.BASE_URL}/payment-failed`, // backend API endpoint
       language: "EN",
+      merchant_param1: cleanOrderId,
     };
 
     const dataString = querystring.stringify(ccAvenueData);
@@ -26,7 +26,6 @@ const TrigerPayment = (req, res, payload) => {
       paymentRedirect: true,
       redirectUrl: url,
     });
-
   } catch (err) {
     console.error("❌ Error in CCAvenue Trigger:", err);
     return res.status(500).json({ message: "Failed to initialize payment" });
@@ -34,4 +33,3 @@ const TrigerPayment = (req, res, payload) => {
 };
 
 module.exports = { TrigerPayment };
-
